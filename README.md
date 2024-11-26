@@ -62,7 +62,7 @@ python query_vectordb.py --method query_vector_db \
 --query_num 100 \ 
 --batch_size 32 \
 --device cuda \
---result_file_name your_result_file_name
+--result_file_name your_result_file_name \
 --log_file_name your_log_file_name
 ```
 
@@ -120,11 +120,11 @@ This method queries the vector database using image embeddings. The script proce
 
  This method clusters the image embeddings first, and then queries the vector database using the centroids of each cluster. It retrieves representative images from each cluster, ensuring diverse results.
 
-#### **query_with_fixed_total_queries_allow_duplication**
+#### **query_with_fixed_total_queries_no_duplication**
 
 This method ensures that the total number of queries is fixed across the entire dataset, with no duplication of image results.
 
-#### **query_with_fixed_total_queries_no_duplication**
+#### **query_with_fixed_total_queries_allow_duplication**
 
 This method also ensures that a fixed total number of queries is performed, but it allows duplication of image results.
 
