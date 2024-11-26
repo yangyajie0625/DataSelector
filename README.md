@@ -50,6 +50,7 @@ This script allows you to query a vector database using different methods. The q
 ### Running the Script
 
 To run the script, you must choose either k or query_num based on the query method you are using. 
+
 Example command:
 
 ```bash
@@ -58,7 +59,7 @@ python query_vectordb.py --method query_vector_db \
 --vector_db_name your_vector_db_name \
 --clip_path /path/to/clip_model \
 --dataset_path /path/to/dataset \
---k 5
+--k 5 \
 --query_num 100 \ 
 --batch_size 32 \
 --device cuda \
