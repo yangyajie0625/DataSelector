@@ -16,6 +16,9 @@ class TimeLogger:
         current_time = time.time()
         self.logs.append((moment_name, current_time))
 
+    def record_text(self, text):
+        self.logs.append((text,))
+
     def start_period(self, period_name):
         start_time = time.time()
         self.logs.append((period_name, start_time, 0))
@@ -30,7 +33,9 @@ class TimeLogger:
     def save_logs(self):
         with open(self.log_filename, 'w') as file:
             for log in self.logs:
-                if len(log) == 2:
+                if len(log) == 1:
+                    file.write(f"{log[0]}\n")
+                elif len(log) == 2:
                     file.write(f"{log[0]} at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(log[1]))}\n")
                 elif len(log) == 3:
                     start_time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(log[1]))

@@ -2,6 +2,8 @@
 
 ## Setup
 
+### 1. Install Dependencies
+
 First, install all the required libraries listed in requirements.txt:
 
 ```bash
@@ -12,17 +14,32 @@ conda activate vector_db
 pip install -r requirements.txt
 ```
 
+### 2. Download the CLIP Model
+
+This project relies on the CLIP model to extract image embeddings. You can download a pre-trained CLIP model from **Hugging Face**:
+
+**Recommended Model:** [clip-vit-large-patch14-336](https://huggingface.co/openai/clip-vit-large-patch14-336)
+
+You can download the model manually from the above link.
+After downloading the model, you can set `--clip_path` to the local path containing the model files.
+
+Example:
+```bash
+--clip_path /path/to/clip-vit-large-patch14-336
+```
+
+For more details, visit [Hugging Face CLIP Model Hub](https://huggingface.co/openai/clip-vit-large-patch14-336).
 
 
 ## Creating or updating a vector database
 
-Load the source dataset, use the CLIP model to extract features, and save them in the vector database.
+Load the source dataset, extract image features using the CLIP model, and store them in the vector database. The source dataset represents the image collection that will serve as the retrieval pool during querying.
 
 ```bash
 python create_or_update_vectordb.py create \
 --vector_db_path /path/to/save/vector_db \
 --vector_db_name your_vector_db \
---clip_path /path/to/clip_model \
+--clip_path /path/to/clip_model_directory \
 --dataset_path /path/to/dataset \
 --distance_func cosine \
 --batch_size 32 \
@@ -34,7 +51,7 @@ Add a new source dataset to the existing vector database.
 python create_or_update_vectordb.py update \
 --vector_db_path /path/to/load/vector_db \
 --vector_db_name your_vector_db \
---clip_path /path/to/clip_model \
+--clip_path /path/to/clip_model_directory \
 --dataset_path /path/to/dataset \
 --distance_func cosine \
 --batch_size 32 \
@@ -45,7 +62,7 @@ Valid options for distance_func are "l2", "ip", or "cosine", representing the th
 
 ## Querying a vector database
 
-This script allows you to query a vector database using different methods. The query is performed on a dataset of images, and the script retrieves similar images from the vector database. The embeddings of images are either loaded from a file or computed directly using a CLIP model.
+Query a vector database using different methods. The query is performed using images from a target dataset. The script retrieves similar images from the source dataset stored in the vector database. The embeddings of the target dataset images can either be loaded from a file or computed directly using a CLIP model.
 
 ### Running the Script
 
@@ -57,7 +74,7 @@ Example command:
 python query_vectordb.py --method query_vector_db \
 --vector_db_path /path/to/load/vector_db \
 --vector_db_name your_vector_db_name \
---clip_path /path/to/clip_model \
+--clip_path /path/to/clip_model_directory \
 --dataset_path /path/to/dataset \
 --k 5 \
 --query_num 100 \ 
@@ -70,25 +87,25 @@ python query_vectordb.py --method query_vector_db \
 
 ### Parameters
 
-| Parameter                      | Required/Optional                                 | Default Value         | Description                                                  |
-| ------------------------------ | ------------------------------------------------- | --------------------- | ------------------------------------------------------------ |
-| **--method**                   | Required                                          | None                  | The query method to use (e.g., `query_vector_db`, `query_by_sort`, etc.). For more details on available methods, see the [Image Embedding Methods](#image-embedding-methods) section. |
-| **--vector_db_path**           | Required (for DB queries)                         | None                  | Path to the vector database.                                 |
-| **--vector_db_name**           | Required (for DB queries)                         | None                  | The name of the vector database to load.                     |
-| **--clip_path**                | Required (only if embeddings need to be computed) | None                  | Path to the CLIP model and processor. Used to compute embeddings for images or captions, unless embeddings are pre-loaded from a file. |
-| **--dataset_path**             | Required (only if embeddings need to be computed) | None                  | Path to the image dataset used for querying. Required if computing image embeddings. Not needed if embeddings are loaded from a file. |
-| **--load_embedding_from_file** | Optional                                          | None                  | If set, the script will load precomputed embeddings from the file specified by `--embedding_file_path`. |
-| **--embedding_file_path**      | Required if `--load_embedding_from_file` is set   | None                  | Path to the `.npz` file containing precomputed image embeddings and their associated paths. |
-| **--caption_path**             | Required for caption-based methods                | None                  | Path to a JSON file with captions for querying.              |
-| **--query_num**                | Optional                                          | None                  | Total number of queries to perform across the dataset.       |
-| **--cluster_num**              | Optional                                          | 3                     | Number of clusters when performing clustering queries.       |
-| **--random_state**             | Optional                                          | 1                     | Random seed for clustering.                                  |
-| **--batch_size**               | Optional                                          | 32                    | Batch size for image embedding computation.                  |
-| **-k**                         | Optional                                          | 1                     | The number of most similar images to retrieve for each query. |
-| **-m**                         | Optional                                          | 1                     | Parameter used in `query_by_sort` method to control the number of images sampled from the dataset. |
-| **--device**                   | Optional                                          | None                  | Device for computation (`cpu` or `cuda`).                    |
-| **--result_file_name**         | Optional                                          | Generated from method | The file name for saving query results in JSON format.       |
-| **--log_file_name**            | Optional                                          | Generated from method | The file name for saving the time log.                       |
+| Parameter                      | Required/Optional                                                                           | Default Value         | Description                                                                                                                                                   |
+|--------------------------------|---------------------------------------------------------------------------------------------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **--method**                   | Required                                                                                    | None                  | The query method to use (e.g., query_vector_db, query_by_sort, etc.). For more details on available methods, see the [Query Methods](#query-methods) section. |
+| **--vector_db_path**           | Required (for DB queries)                                                                   | None                  | Path to the vector database.                                                                                                                                  |
+| **--vector_db_name**           | Required (for DB queries)                                                                   | None                  | The name of the vector database to load.                                                                                                                      |
+| **--clip_path**                | Required (only if embeddings need to be computed)                                           | None                  | Path to the CLIP model and processor. Used to compute embeddings for images or captions, unless embeddings are pre-loaded from a file.                        |
+| **--dataset_path**             | Required (only if embeddings need to be computed)                                           | None                  | Path to the image dataset used for querying. Required if computing image embeddings. Not needed if embeddings are loaded from a file.                         |
+| **--load_embedding_from_file** | Optional                                                                                    | None                  | If set, the script will load precomputed embeddings from the file specified by `--embedding_file_path`.                                                       |
+| **--embedding_file_path**      | Required if `--load_embedding_from_file` is set                                             | None                  | Path to the `.npz` file containing precomputed image embeddings and their associated paths.                                                                   |
+| **--caption_path**             | Required (for caption-based methods)                                                        | None                  | Path to a JSON file with captions for querying.                                                                                                               |
+| **--query_num**                | Optional                                                                                    | None                  | The number of image results to collect.                                                                                                                       |
+| **--batch_size**               | Optional                                                                                    | 32                    | Batch size for querying the vector database.                                                                                                                  |
+| **-k**                         | Optional                                                                                    | 1                     | The number of images to retrieve for each query.                                                                                                              |
+| **-m**                         | Optional (for `query_by_sort`)                                                              | 1                     | Parameter to control the number of images sampled from the dataset.                                                                                           |
+| **--density_threshold**        | Optional (for `query_vectors_adaptive` and `query_with_fixed_total_queries_no_duplication`) | 0.2                   | Minimum valid result ratio; controls how to increase query attempts if few new images are found.                                                              |
+| **--low_density_limit**        | Optional (for `query_vectors_adaptive`)                                                     | 3                     | Maximum consecutive low-density rounds before stopping; prevents excessive low-efficiency queries.                                                            |
+| **--device**                   | Optional                                                                                    | None                  | Device for computation (`cpu` or `cuda`).                                                                                                                     |
+| **--result_file_name**         | Optional                                                                                    | Generated from method | The file name for saving query results in JSON format.                                                                                                        |
+| **--log_file_name**            | Optional                                                                                    | Generated from method | The file name for saving the time log.                                                                                                                        |
 
 
 
@@ -115,27 +132,27 @@ The **--method** parameter determines the specific query strategy used. Below ar
 
 #### **query_vector_db**
 
-This method queries the vector database using image embeddings. The script processes all images in the dataset, converts them into embeddings, and retrieves a set of similar images from the vector database for each image.
+This method queries the vector database using image embeddings in a batch process. It processes all images in the dataset at once, converts them into embeddings, and retrieves a set of approximately most similar images from the vector database.
 
-#### **cluster_and_query_vector_db**
+#### **query_each_image_separately**
 
- This method clusters the image embeddings first, and then queries the vector database using the centroids of each cluster. It retrieves representative images from each cluster, ensuring diverse results.
+This method queries the vector database individually for each image in the dataset. Unlike the batch approach, it processes images one by one, retrieving a set of approximately most similar images.
 
 #### **query_with_fixed_total_queries_no_duplication**
 
-This method ensures that the total number of queries is fixed across the entire dataset, with no duplication of image results.
+This method ensures that a fixed number of unique image results is collected. It adjusts the queries per image based on retrieval efficiency, continuing until the required number of unique results is obtained.
 
 #### **query_with_fixed_total_queries_allow_duplication**
 
-This method also ensures that a fixed total number of queries is performed, but it allows duplication of image results.
+This method collects a fixed number of image results, allowing duplicates. It is more efficient but may result in repeated images.
+
+#### **query_vectors_adaptive**
+
+This method adaptively adjusts the number of queries per image based on the uniqueness of retrieved results. It aims to maximize the diversity of images while reducing redundant queries. When `query_num` is set to the size of the source dataset, the number of unique results can reflect the upper limit of source samples that match the target dataset, avoiding inefficient queries.
 
 #### **query_vector_db_by_caption**
 
 This method sorts the captions based on cosine similarity and retrieves images accordingly. The captions are ranked by similarity, and images are retrieved based on this ranking.
-
-#### **query_each_image_separately**
-
-This method queries the vector database for each image in the dataset individually. Unlike batch processing, it handles each image one by one and retrieves the most similar images for each separately.
 
 #### **query_by_sort**
 

@@ -8,17 +8,17 @@ from utils import load_clip_model_and_processor, batch_image_to_embedding
 from time_log import TimeLogger
 import os
 import numpy as np
-
+import sys
 
 def main():
     parser = argparse.ArgumentParser(description='Query the vector database using the specified method.')
     parser.add_argument('--method', choices=[
         'query_vector_db',
-        'cluster_and_query_vector_db',
+        'query_each_image_separately',
+        'query_vectors_adaptive',
         'query_with_fixed_total_queries_allow_duplication',
         'query_with_fixed_total_queries_no_duplication',
         'query_vector_db_by_caption',
-        'query_each_image_separately',
         'query_by_sort'
     ], required=True, help='Method to query the vector database')
     parser.add_argument('--vector_db_path', help='Path to load the vector database')
@@ -31,17 +31,18 @@ def main():
     parser.add_argument('--caption_path', help='Path to the caption JSON file (for caption-based queries)')
     parser.add_argument('--query_num', type=int,
                         help='Total number of images queried from the vector database (used in certain methods)')
-    parser.add_argument('--cluster_num', type=int, default=3,
-                        help='Number of clusters (used in clustering query method)')
-    parser.add_argument('--random_state', type=int, default=1,
-                        help='Random state for clustering (used in clustering query method)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for processing images')
     parser.add_argument('-k', type=int, default=1,
                         help='The number of images queried from the vector database for each image')
     parser.add_argument('-m', type=int, default=1, help='Parameter m for query_by_sort method')
+    parser.add_argument('--density_threshold', type=float, default=0.2,
+                        help='Minimum valid result ratio')
+    parser.add_argument('--low_density_limit', type=int, default=3,
+                        help='Maximum consecutive low-density rounds before stopping')
     parser.add_argument('--device', default=None, help='Computation device (e.g., "cpu" or "cuda")')
     parser.add_argument('--result_file_name', help='json file name for saving results')
     parser.add_argument('--log_file_name', help='file name of time log')
+
     args = parser.parse_args()
     if not os.path.exists('logs'):
         os.makedirs('logs')
@@ -49,7 +50,8 @@ def main():
         args.log_file_name = "time_log_" + args.method
     args.log_file_name = "logs/" + args.log_file_name
     time_logger = TimeLogger(log_filename=args.log_file_name, with_current_time=True)
-
+    command_line = "python " + " ".join(sys.argv)
+    time_logger.record_text(f"Command: {command_line}")
     if not os.path.exists('results'):
         os.makedirs('results')
     if not args.result_file_name:
@@ -119,21 +121,32 @@ def main():
                     'query_image': image_path,
                     'result': result_list
                 })
-
-        elif args.method == 'cluster_and_query_vector_db':
+        elif args.method == 'query_each_image_separately':
             time_logger.start_period("Query")
-            results, valid_image_paths = vector_db.cluster_and_query_vector_db(
+            results = vector_db.query_each_image_separately(
+                query_embedding=query_embedding,
+                valid_image_paths=valid_image_paths,
+                k=args.k
+            )
+            time_logger.end_period("Query")
+            for result in results:
+                for metadata in result.get('metadatas'):
+                    for item in metadata:
+                        results_serializable.append({'result': item.get('path')})
+
+
+        elif args.method == 'query_with_fixed_total_queries_no_duplication':
+            time_logger.start_period("Query")
+            results, valid_image_paths = vector_db.query_with_fixed_total_queries_no_duplication(
                 query_embedding=query_embedding,
                 valid_image_paths=valid_image_paths,
                 query_num=args.query_num,
-                cluster_num=args.cluster_num,
-                random_state=args.random_state,
+                density_threshold=args.density_threshold,
+                batch_size=args.batch_size
             )
             time_logger.end_period("Query")
-            for cid, result in enumerate(results):
-                results_serializable.append({
-                    'cluster_id': cid,
-                    'result': result})
+            for result in results:
+                results_serializable.append({'result': result})
         elif args.method == 'query_with_fixed_total_queries_allow_duplication':
             time_logger.start_period("Query")
             results, valid_image_paths = vector_db.query_with_fixed_total_queries_allow_duplication(
@@ -144,12 +157,16 @@ def main():
             time_logger.end_period("Query")
             for result in results:
                 results_serializable.append({'result': result})
-        elif args.method == 'query_with_fixed_total_queries_no_duplication':
+
+        elif args.method == 'query_vectors_adaptive':
             time_logger.start_period("Query")
-            results, valid_image_paths = vector_db.query_with_fixed_total_queries_no_duplication(
+            results, valid_image_paths = vector_db.query_vectors_adaptive(
                 query_embedding=query_embedding,
                 valid_image_paths=valid_image_paths,
-                query_num=args.query_num
+                query_num=args.query_num,
+                density_threshold=args.density_threshold,
+                low_density_limit=args.low_density_limit,
+                batch_size=args.batch_size
             )
             time_logger.end_period("Query")
             for result in results:
@@ -171,22 +188,12 @@ def main():
                 for metadata in result.get('metadatas'):
                     for item in metadata:
                         results_serializable.append({'result': item.get('path')})
-        elif args.method == 'query_each_image_separately':
-            time_logger.start_period("Query")
-            results = vector_db.query_each_image_separately(
-                query_embedding=query_embedding,
-                valid_image_paths=valid_image_paths,
-                k=args.k
-            )
-            time_logger.end_period("Query")
-            for result in results:
-                for metadata in result.get('metadatas'):
-                    for item in metadata:
-                        results_serializable.append({'result': item.get('path')})
+
         else:
             print(f"Unknown method: {args.method}")
             sys.exit(1)
 
+    time_logger.record_text(f"Count of results: {len(results_serializable)}")
     with open(args.result_file_name, 'w', encoding='utf-8') as f:
         json.dump(results_serializable, f, ensure_ascii=False, indent=4)
     time_logger.record_moment("Results saved")

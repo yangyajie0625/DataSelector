@@ -3,9 +3,9 @@ from PIL import Image
 import cv2
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
-from sklearn.cluster import KMeans
 from transformers import CLIPModel, CLIPProcessor
 import os
+import random
 from sklearn.metrics.pairwise import cosine_similarity
 Image.MAX_IMAGE_PIXELS = None
 def load_clip_model_and_processor(device, clip_path):
@@ -30,6 +30,7 @@ def batch_image_to_embedding(image_paths, clip_model, clip_processor, device, ba
                   that were successfully processed and embedded.
         """
 
+    random.shuffle(image_paths)
     embeddings = []  # List to store image embeddings
     valid_paths = []  # List to store valid image file paths, ensuring the lengths of embeddings and valid paths are consistent, since only successfully processed images are included.
     for i in tqdm(range(0, len(image_paths), batch_size), desc="Processing images"):
@@ -141,16 +142,6 @@ def extract_frames_from_directory(input_dir, output_dir, interval=1, max_workers
             for future in futures:
                 future.result()  # Wait for all threads to complete
 
-
-def perform_kmeans_clustering(embeddings, cluster_num, random_state):
-    kmeans = KMeans(n_clusters=cluster_num, random_state=random_state)
-    kmeans.fit(embeddings)
-    cluster_labels = kmeans.labels_
-
-    clustered_embeddings = {i: [] for i in range(cluster_num)}
-    for label, embedding in zip(cluster_labels, embeddings):
-        clustered_embeddings[label].append(embedding)
-    return clustered_embeddings
 
 def get_top_k_images_for_caption(image_embeddings, image_paths, caption_embedding, k):
     image_scores = []

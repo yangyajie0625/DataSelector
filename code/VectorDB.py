@@ -1,7 +1,7 @@
 import json
 import torch
 from chromadb import PersistentClient
-from utils import batch_image_to_embedding, perform_kmeans_clustering, caption_to_embedding
+from utils import batch_image_to_embedding, caption_to_embedding
 import sqlite3
 
 class VectorDB:
@@ -14,14 +14,14 @@ class VectorDB:
         self.collection = client.get_collection(name=vector_db_name)
 
     def create_vector_db(self, clip_model, clip_processor, image_paths, vector_db_save_path, vector_db_name,
-                         distance_func, batch_size=32):
+                         distance_func, batch_size):
 
         image_embeddings, valid_image_paths = batch_image_to_embedding(image_paths, clip_model, clip_processor,
                                                                        self.device, batch_size)
         metadata = [{"path": img_path} for img_path in valid_image_paths]
         self._save_embeddings_to_db(vector_db_save_path, vector_db_name, image_embeddings, metadata, distance_func)
 
-    def update_vector_db(self, clip_model, clip_processor, image_paths, batch_size=32):
+    def update_vector_db(self, clip_model, clip_processor, image_paths, batch_size):
 
         image_embeddings, valid_image_paths = batch_image_to_embedding(image_paths, clip_model, clip_processor,
                                                                        self.device, batch_size)
@@ -49,147 +49,115 @@ class VectorDB:
         results = self.collection.query(query_embeddings=query_embedding, n_results=k)
         return results, valid_image_paths
 
-    def cluster_and_query_vector_db(self, query_embedding, valid_image_paths, query_num, random_state, cluster_num=3):
-        clustered_embeddings = perform_kmeans_clustering(query_embedding, cluster_num, random_state)
-        result_list = []
-        query_num_per_cluster = query_num // cluster_num
-        global_result_set = set()
-        print("query_num_per_cluster", query_num_per_cluster)
+    def query_vectors_adaptive(self, query_embedding, valid_image_paths, query_num, density_threshold, low_density_limit, batch_size):
+        collected = set()
+        queries_per_image = max(1, query_num // len(query_embedding))
+        queries_per_image_old = 0
+        # print(f"| Initial queries_per_image: {queries_per_image}")
+        low_density_streak = 0
+        exceed = False
+        should_break = False
 
-        for cluster_id in range(cluster_num):
-            result_set = set()
-            cluster_embeddings = clustered_embeddings[cluster_id]
-            cluster_size = len(cluster_embeddings)
-            print("cluster_id", cluster_id)
-            print("cluster_size", cluster_size)
-
-            if cluster_size == 0:
-                continue
-
-            n_results_per_data = max(1, query_num_per_cluster // cluster_size)
-            result = self.collection.query(
-                query_embeddings=cluster_embeddings,
-                n_results=n_results_per_data
-            )
-            print("n_results_per_data", n_results_per_data)
-
-            for res in result['metadatas']:
-                for metadata in res:
-                    if metadata['path'] not in global_result_set:
-                        result_set.add(metadata['path'])
-                        global_result_set.add(metadata['path'])
-
-            remaining_queries = query_num_per_cluster - len(result_set)
-            while remaining_queries > 0:
-                n_results_per_data = n_results_per_data * 2
-                for embedding in query_embedding:
-                    if remaining_queries <= 0:
-                        break
+        while len(collected) < query_num and low_density_streak < low_density_limit:
+            start_count = len(collected)
+            try:
+                for i in range(0, len(query_embedding), batch_size):
+                    batch_embeddings = query_embedding[i:i + batch_size]
 
                     result = self.collection.query(
-                        query_embeddings=[embedding],
-                        n_results=n_results_per_data
-                    )
-                    for res in result['metadatas']:
-                        for metadata in res:
-                            if metadata['path'] not in global_result_set:
-                                result_set.add(metadata['path'])
-                                global_result_set.add(metadata['path'])
-                    remaining_queries = query_num_per_cluster - len(result_set)
-
-            result_list.append(list(result_set))
-
-        return result_list, valid_image_paths
-
-    # def cluster_and_query_vector_db(self, query_embedding, valid_image_paths, query_num, random_state, cluster_num=3):
-    #     clustered_embeddings = perform_kmeans_clustering(query_embedding, cluster_num, random_state)
-    #     result_list = []
-    #     query_num_per_cluster = query_num // cluster_num
-    #     print("query_num_per_cluster",query_num_per_cluster)
-    #     for cluster_id in range(cluster_num):
-    #         result_set = set()
-    #         cluster_embeddings = clustered_embeddings[cluster_id]
-    #         cluster_size = len(cluster_embeddings)
-    #         print("cluster_id",cluster_id)
-    #         print("cluster_size",cluster_size)
-    #         if cluster_size == 0:
-    #             continue
-    #         n_results_per_data = max(1, query_num_per_cluster // cluster_size)
-    #         result = self.collection.query(
-    #             query_embeddings=cluster_embeddings,
-    #             n_results=n_results_per_data
-    #         )
-    #         print("n_results_per_data",n_results_per_data)
-    #         for res in result['metadatas']:
-    #             for metadata in res:
-    #                 result_set.add(metadata['path'])
-    #         remaining_queries = query_num_per_cluster - len(result_set)
-    #         while remaining_queries > 0:
-    #             n_results_per_data = n_results_per_data * 2
-    #             for embedding in query_embedding:
-    #                 if remaining_queries <= 0:
-    #                     break
-    #
-    #                 result = self.collection.query(
-    #                     query_embeddings=[embedding],
-    #                     n_results=n_results_per_data
-    #                 )
-    #                 for res in result['metadatas']:
-    #                     for metadata in res:
-    #                         result_set.add(metadata['path'])
-    #                 remaining_queries = query_num_per_cluster - len(result_set)
-    #         result_list.append(list(result_set))
-    #
-    #
-    #     return result_list, valid_image_paths
-
-    def query_with_fixed_total_queries_no_duplication(self, query_embedding, valid_image_paths, query_num):
-
-        total_images = len(query_embedding)
-        queries_per_image = max(1, query_num // total_images)
-        result_paths_set = set()
-        try:
-            result = self.collection.query(
-                query_embeddings=query_embedding,
-                n_results=queries_per_image,
-            )
-
-            for res in result['metadatas']:
-                for metadata in res:
-                    result_paths_set.add(metadata['path'])
-
-        except sqlite3.OperationalError as e:
-            if "too many SQL variables" in str(e):
-
-                for embedding in query_embedding:
-                    result = self.collection.query(
-                        query_embeddings=[embedding],
+                        query_embeddings=batch_embeddings,
                         n_results=queries_per_image
                     )
-                    for res in result['metadatas']:
-                        for metadata in res:
-                            result_paths_set.add(metadata['path'])
+                    # print(f"result:{result}")
+                    for metadata_list in result.get('metadatas',):
+                        for meta in metadata_list:
+                            if meta and 'path' in meta:
+                                collected.add(meta['path'])
+                                if len(collected) >= query_num:
+                                    should_break = True
+                                    break
+                        if should_break:
+                            break
+                    if should_break:
+                        break
 
-        remaining_queries = query_num - len(result_paths_set)
+                if not should_break:
+                    current_density = (len(collected) - start_count) / (
+                                (queries_per_image - queries_per_image_old) * len(query_embedding))
+                    # print(f"| Collected this round: {len(collected)} - {start_count} = {len(collected) - start_count}")
+                    # print(f"| Current density: {current_density:.2f}")
 
-        while remaining_queries > 0:
-            queries_per_image = queries_per_image * 2
-            for embedding in query_embedding:
-                if remaining_queries <= 0:
-                    break
+                    queries_per_image_old = queries_per_image
+                    if current_density < density_threshold:
+                        low_density_streak += 1
+                        queries_per_image = queries_per_image << 2
+                    else:
+                        low_density_streak = 0
+                        queries_per_image = queries_per_image << 1
+                    # print(f"| current queries_per_image: {queries_per_image}")
+            except sqlite3.OperationalError as e:
+                if "too many SQL variables" in str(e):
+                    exceed = True
+                    max_sql_vars = queries_per_image_old * batch_size
+            if exceed:
+                batch_size = max(max_sql_vars // queries_per_image, 1)
 
-                result = self.collection.query(
-                    query_embeddings=[embedding],
-                    n_results=queries_per_image
-                )
-                for res in result['metadatas']:
-                    for metadata in res:
-                        result_paths_set.add(metadata['path'])
-                remaining_queries = query_num - len(result_paths_set)
-
-        result_paths_list = list(result_paths_set)
+        # print(f"| len(collected):{len(collected)}")
+        result_paths_list = list(collected)
         return result_paths_list, valid_image_paths
+    def query_with_fixed_total_queries_no_duplication(self, query_embedding, valid_image_paths, query_num,
+                                                      density_threshold, batch_size):
+        collected = set()
+        queries_per_image = max(1, query_num // len(query_embedding))
+        queries_per_image_old = 0
+        # print(f"| Initial queries_per_image: {queries_per_image}")
+        exceed = False
+        should_break = False
+        while len(collected) < query_num:
+            start_count = len(collected)
+            try:
+                for i in range(0, len(query_embedding), batch_size):
+                    batch_embeddings = query_embedding[i:i + batch_size]
 
+                    result = self.collection.query(
+                        query_embeddings=batch_embeddings,
+                        n_results=queries_per_image
+                    )
+                    # print(f"result:{result}")
+                    for metadata_list in result.get('metadatas', ):
+                        for meta in metadata_list:
+                            if meta and 'path' in meta:
+                                collected.add(meta['path'])
+                                if len(collected) >= query_num:
+                                    should_break = True
+                                    break
+                        if should_break:
+                            break
+                    if should_break:
+                        break
+
+                if not should_break:
+                    current_density = (len(collected) - start_count) / (
+                            (queries_per_image - queries_per_image_old) * len(query_embedding))
+                    # print(f"| Collected this round: {len(collected)} - {start_count} = {len(collected) - start_count}")
+                    # print(f"| Current density: {current_density:.2f}")
+
+                    queries_per_image_old = queries_per_image
+                    if current_density < density_threshold:
+                        queries_per_image = queries_per_image << 2
+                    else:
+                        queries_per_image = queries_per_image << 1
+                    # print(f"| current queries_per_image: {queries_per_image}")
+            except sqlite3.OperationalError as e:
+                if "too many SQL variables" in str(e):
+                    exceed = True
+                    max_sql_vars = queries_per_image_old * batch_size
+            if exceed:
+                batch_size = max(max_sql_vars // queries_per_image, 1)
+
+        # print(f"| len(collected):{len(collected)}")
+        result_paths_list = list(collected)
+        return result_paths_list, valid_image_paths
     def query_with_fixed_total_queries_allow_duplication(self, query_embedding, valid_image_paths, query_num):
         total_images = len(query_embedding)
         queries_per_image = max(1, query_num // total_images)
@@ -255,6 +223,7 @@ class VectorDB:
             )
             result_list.append(results)
         return result_list
+
 
     def _save_embeddings_to_db(self, vector_db_save_path, vector_db_name, image_embeddings, metadata, distance_func):
         client = PersistentClient(path=vector_db_save_path)
