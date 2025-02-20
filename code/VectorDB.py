@@ -110,7 +110,6 @@ class VectorDB:
         collected = set()
         queries_per_image = max(1, query_num // len(query_embedding))
         queries_per_image_old = 0
-        # print(f"| Initial queries_per_image: {queries_per_image}")
         exceed = False
         should_break = False
         while len(collected) < query_num:
