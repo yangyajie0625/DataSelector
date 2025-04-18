@@ -7,10 +7,10 @@
 First, install all the required libraries listed in requirements.txt:
 
 ```bash
-git clone https://github.com/yangyajie0625/DataSelector-PlusPlus.git DS++
-cd DS++
-conda create -n DataSelector_PlusPlus_Venv python=3.10
-conda activate DataSelector_PlusPlus_Venv
+git clone https://github.com/yangyajie0625/DataSelector.git DataSelector++
+cd DataSelector++
+conda create -n DataSelector_Venv python=3.10
+conda activate DataSelector_Venv
 pip install -r requirements.txt
 ```
 
