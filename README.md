@@ -1,4 +1,4 @@
-# VectorDB-Domain-Adaptation
+# DataSelector++
 
 ## Setup
 
