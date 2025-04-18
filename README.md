@@ -7,10 +7,10 @@
 First, install all the required libraries listed in requirements.txt:
 
 ```bash
-git clone https://github.com/yangyajie0625/VectorDB-Domain-Adaptation.git vector_db
-cd vector_db
-conda create -n vector_db python=3.10
-conda activate vector_db
+git clone https://github.com/yangyajie0625/DataSelector-PlusPlus.git DS++
+cd DS++
+conda create -n DataSelector_PlusPlus_Venv python=3.10
+conda activate DataSelector_PlusPlus_Venv
 pip install -r requirements.txt
 ```
 
