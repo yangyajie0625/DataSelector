@@ -1,8 +1,8 @@
 # DataSelector++
 
-## Setup
+## Setup 🛠️
 
-### 1. Install Dependencies
+### 1. Install Dependencies 📥
 
 First, install all the required libraries listed in requirements.txt:
 
@@ -14,7 +14,7 @@ conda activate DataSelector_Venv
 pip install -r requirements.txt
 ```
 
-### 2. Download the CLIP Model
+### 2. Download the CLIP Model 📡
 
 This project relies on the CLIP model to extract image embeddings. You can download a pre-trained CLIP model from **Hugging Face**:
 
@@ -31,7 +31,7 @@ Example:
 For more details, visit [Hugging Face CLIP Model Hub](https://huggingface.co/openai/clip-vit-large-patch14-336).
 
 
-## Creating or updating a vector database
+## Creating or updating a vector database 🔄
 
 Load the source dataset, extract image features using the CLIP model, and store them in the vector database. The source dataset represents the image collection that will serve as the retrieval pool during querying.
 
@@ -60,7 +60,7 @@ python create_or_update_vectordb.py update \
 
 Valid options for distance_func are "l2", "ip", or "cosine", representing the three distance functions: Squared L2, Inner product, and Cosine similarity.
 
-## Querying a vector database
+## Querying a vector database 🔍
 
 Query a vector database using different methods. The query is performed using images from a target dataset. The script retrieves similar images from the source dataset stored in the vector database. The embeddings of the target dataset images can either be loaded from a file or computed directly using a CLIP model.
 
@@ -85,7 +85,7 @@ python query_vectordb.py --method query_vector_db \
 ```
 
 
-### Parameters
+### Parameters ⚙️
 
 | Parameter                      | Required/Optional                                                                           | Default Value         | Description                                                                                                                                                   |
 |--------------------------------|---------------------------------------------------------------------------------------------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
